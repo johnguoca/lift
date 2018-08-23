@@ -4,7 +4,7 @@ Created on Thu Aug 16 13:22:43 2018
 
 @author: JG
 """
-
+#%%
 import os
 import sys
 import logging
@@ -18,7 +18,8 @@ try:
 except:
     print( "Install psycopg2")
     exit(123)
-    
+
+#%%
 PG_CONN_STRING = "dbname='postgres' port='5432' user='postgres' password='phludphlud'"
 dbconn = pg.connect(PG_CONN_STRING)
 cursor = dbconn.cursor()
@@ -44,7 +45,7 @@ print(review_df.shape)
 review_df['stars'] = review_df['stars'].astype(int)
 print(review_df.dtypes)
 filtered_df = review_df[review_df['stars'].isin([1,5])]
-print(filtered_df.dtypes)
+
 print(filtered_df.shape)
 
 #%%
@@ -58,7 +59,15 @@ filtered_df['stars'] = filtered_df['stars'].apply(convert_scale)
 print(filtered_df.head())
 
 #%%
-filtered_df.to_csv("filtered.csv")
+print("All 1 and 5 star reviews:", filtered_df.shape)
+x = int(filtered_df.shape[0]/10)
+
+print(filtered_df.iloc[0:x].shape)
+
+
+#%%
+# The full dataset is too large, let's use only 10% of it
+filtered_df.iloc[0:x].to_csv("filtered2.csv", index=False)
 
 #%%
 # We will now use PyTorch to build a simple RNN which can then be trained on the data
@@ -84,12 +93,11 @@ LABEL = data.LabelField(tensor_type=torch.FloatTensor)
 #%%
 datafields = [("text", TEXT), ("stars", LABEL)]
 train = data.TabularDataset(
-        path = 'filtered.csv', format='csv', skip_header=True, fields=datafields) 
+        path = 'filtered2.csv', format='csv', skip_header=True, fields=datafields) 
 
 
 #%%
 # Split training data into train, valid and test sets
-train, train_dummies = train.split(split_ratio=[0.1, 0.9]) # Only use 10% of the data, otherwise training takes forever...
 train, valid, test = train.split(split_ratio=[0.98, 0.01, 0.01])
 
 print('Train length:', len(train))
@@ -99,7 +107,8 @@ print('Test length:', len(test))
 TEXT.build_vocab(train, max_size=25000, vectors="glove.6B.100d")
 LABEL.build_vocab(train)
 
-print("Vocab built.")
+print("Length of TEXT vocab:", len(TEXT.vocab))
+print("Length of LABEL vocab:", len(LABEL.vocab))
 
 BATCH_SIZE = 64
 
@@ -147,7 +156,6 @@ model.embedding.weight.data.copy_(pretrained_embeddings)
 #%%
 # Now we are ready to train the model!
 import torch.optim as optim
-import torch.nn.functional as F
 
 optimizer = optim.Adam(model.parameters())
 
@@ -160,6 +168,8 @@ criterion = criterion.to(device)
 
 def binary_accuracy(preds, y):
     rounded_preds = torch.round(torch.sigmoid(preds))
+    
+    # print(y)
     correct = (rounded_preds == y).float()
     
     accuracy = correct.sum()/len(correct)
@@ -234,7 +244,7 @@ def predict_sentiment(sentence):
     indexed = [TEXT.vocab.stoi[t] for t in tokenized]
     tensor = torch.LongTensor(indexed).to(device)
     tensor = tensor.unsqueeze(1)
-    prediction = F.sigmoid(model(tensor))
+    prediction = torch.sigmoid(model(tensor))
     return prediction.item()
 
 print(predict_sentiment("This restaurant was amazing."))
@@ -242,5 +252,4 @@ print(predict_sentiment("This restaurant was amazing."))
 print(predict_sentiment("The food was awful."))
 
 #%%
-for i in train_iterator:
-    print(i)
+print(len(LABEL.vocab))
